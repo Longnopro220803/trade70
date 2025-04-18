@@ -17,7 +17,7 @@ async function getQuantityByBalance(symbol, price) {
   try {
     const account = await binance.futuresAccount();
     const balance = parseFloat(account.totalWalletBalance);
-    const allocatedBalance = balance * 0.2; // dùng 20% vốn tổng cho mỗi lệnh
+    const allocatedBalance = balance * 0.2;
     const quantity = (allocatedBalance / price).toFixed(1);
     return quantity;
   } catch (err) {
@@ -73,6 +73,9 @@ async function checkSignal(symbol) {
     const stoch = technicalindicators.Stochastic.calculate({
       high: highs, low: lows, close: closes, period: 14, signalPeriod: 3
     });
+    const bb = technicalindicators.BollingerBands.calculate({
+      period: 20, stdDev: 2, values: closes
+    });
 
     const lastClose = closes.at(-1);
     const lastVolume = volumes.at(-1);
@@ -84,20 +87,30 @@ async function checkSignal(symbol) {
     const lastMACD = macd.at(-1);
     const lastRSI = rsi.at(-1);
     const lastStoch = stoch.at(-1);
+    const lastBB = bb.at(-1);
+
+    const closeNearLowerBand = lastClose <= lastBB.lower;
+    const closeNearUpperBand = lastClose >= lastBB.upper;
     const bullishCandle = closes.at(-1) > closes.at(-2);
     const bearishCandle = closes.at(-1) < closes.at(-2);
 
     const longSignal = trendUp &&
                        lastMACD.MACD > lastMACD.signal &&
                        lastStoch.k < 30 && lastStoch.k > lastStoch.d &&
-                       lastRSI < 40 && isVolumeSpike && bullishCandle;
+                       lastRSI < 40 &&
+                       closeNearLowerBand &&
+                       isVolumeSpike &&
+                       bullishCandle;
 
     const shortSignal = trendDown &&
                         lastMACD.MACD < lastMACD.signal &&
                         lastStoch.k > 70 && lastStoch.k < lastStoch.d &&
-                        lastRSI > 60 && isVolumeSpike && bearishCandle;
+                        lastRSI > 60 &&
+                        closeNearUpperBand &&
+                        isVolumeSpike &&
+                        bearishCandle;
 
-    console.log(`[${symbol}] EMA50: ${ema50.at(-1).toFixed(4)} | EMA200: ${ema200.at(-1).toFixed(4)} | MACD: ${lastMACD.MACD.toFixed(4)} | Signal: ${lastMACD.signal.toFixed(4)} | RSI: ${lastRSI.toFixed(2)} | Vol: ${lastVolume.toFixed(2)} | AvgVol: ${avgVolume.toFixed(2)}`);
+    console.log(`[${symbol}] EMA50: ${ema50.at(-1).toFixed(4)} | EMA200: ${ema200.at(-1).toFixed(4)} | MACD: ${lastMACD.MACD.toFixed(4)} | Signal: ${lastMACD.signal.toFixed(4)} | RSI: ${lastRSI.toFixed(2)} | BB: ${lastBB.lower.toFixed(4)}-${lastBB.upper.toFixed(4)} | Vol: ${lastVolume.toFixed(2)} | AvgVol: ${avgVolume.toFixed(2)}`);
 
     if (longSignal) {
       console.log(`[${symbol}] 📈 Tín hiệu LONG`);
